@@ -1,17 +1,48 @@
-import React from 'react';
-import { View, Text, Button, Alert, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, TextInput, Text, Button, Switch, StyleSheet, Alert } from 'react-native';
 import { db } from '../firebase/firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, doc, getDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 export default function CreatePostScreen() {
-  const handleTestPost = async () => {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [anonymous, setAnonymous] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!title || !description) {
+      Alert.alert('Missing Info', 'Please enter both a title and description.');
+      return;
+    }
+
     try {
+      const user = getAuth().currentUser;
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to post.');
+        return;
+      }
+
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      if (!userDoc.exists()) {
+        Alert.alert('Error', 'User profile not found.');
+        return;
+      }
+
+      const userData = userDoc.data();
+
       await addDoc(collection(db, 'posts'), {
-        title: 'Test Post',
-        description: 'This is a test Firestore post',
-        createdAt: Timestamp.now()
+        title,
+        description,
+        anonymous,
+        abroadCity: userData.abroadCity || 'Unknown',
+        userId: user.uid,
+        createdAt: Timestamp.now(),
       });
-      Alert.alert('Success', 'Post added to Firestore!');
+
+      setTitle('');
+      setDescription('');
+      setAnonymous(false);
+      Alert.alert('Success', 'Your post has been submitted!');
     } catch (err) {
       Alert.alert('Error', err.message);
     }
@@ -19,13 +50,41 @@ export default function CreatePostScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>✍️ Create Post Screen</Text>
-      <Button title="Add Test Post" onPress={handleTestPost} />
+      <Text style={styles.label}>Title</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="What's the topic?"
+        value={title}
+        onChangeText={setTitle}
+      />
+      <Text style={styles.label}>Description</Text>
+      <TextInput
+        style={[styles.input, { height: 100 }]}
+        placeholder="Share your tip, question, or experience..."
+        value={description}
+        onChangeText={setDescription}
+        multiline
+      />
+      <View style={styles.switchRow}>
+        <Text>Post Anonymously</Text>
+        <Switch value={anonymous} onValueChange={setAnonymous} />
+      </View>
+      <Button title="Submit Post" onPress={handleSubmit} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  text: { fontSize: 24, marginBottom: 20 }
+  container: { flex: 1, padding: 20 },
+  label: { fontSize: 16, marginTop: 10, marginBottom: 4 },
+  input: {
+    borderWidth: 1, borderColor: '#ccc',
+    borderRadius: 6, padding: 10, fontSize: 16,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 20,
+  }
 });
